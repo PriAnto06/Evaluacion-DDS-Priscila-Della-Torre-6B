@@ -6,6 +6,7 @@ import {
   Pressable,
   Dimensions,
 } from "react-native";
+import { Audio } from "expo-av";
 
 const { width, height } = Dimensions.get("window");
 
@@ -17,7 +18,7 @@ const FRASES = [
   "No podés hacerlo",
   "Algo va a salir mal",
 ];
-// ✅ Tipo para TypeScript
+
 type Pensamiento = {
   id: string;
   texto: string;
@@ -28,47 +29,48 @@ type Pensamiento = {
 export default function AnsiedadScreen() {
   const [pantalla, setPantalla] = useState<"inicio" | "ansiedad" | "final">("inicio");
   const [pensamientos, setPensamientos] = useState<Pensamiento[]>([]);
-  const [intervaloTiempo, setIntervaloTiempo] = useState(2000);
-  const [respirado, setRespirado] = useState(false);
+  const [grabando, setGrabando] = useState(false);
 
-  // Generar pensamientos (ansiedad crece)
-  useEffect(() => {
-    if (pantalla !== "ansiedad") return;
+  // 🎤 Generar pensamientos
+  const generarPensamiento = () => {
+    const frase =
+      FRASES[Math.floor(Math.random() * FRASES.length)];
 
-    const interval = setInterval(() => {
-      const frase =
-        FRASES[Math.floor(Math.random() * FRASES.length)];
-
-      setPensamientos((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(),
-          texto: frase,
-          x: Math.random() * (width - 100),
-          y: Math.random() * (height - 100),
-        },
-      ]);
-
-      // cada vez más rápido
-      setIntervaloTiempo((prev) => (prev > 500 ? prev - 100 : prev));
-    }, intervaloTiempo);
-
-    return () => clearInterval(interval);
-  }, [pantalla, intervaloTiempo]);
-
-  // Botón respirar
-  const respirar = () => {
-    setPensamientos([]);
-    setRespirado(true);
-    setPantalla("final");
+    setPensamientos((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(),
+        texto: frase,
+        x: Math.random() * (width - 100),
+        y: Math.random() * (height - 100),
+      },
+    ]);
   };
 
-  // Colapso automático
-  useEffect(() => {
-    if (pensamientos.length > 25) {
+  // 🎤 Activar micrófono (simula grito)
+  const empezarAGritar = async () => {
+    const permiso = await Audio.requestPermissionsAsync();
+    if (!permiso.granted) return;
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    setGrabando(true);
+
+    // Mientras "grita", aparecen pensamientos
+    const interval = setInterval(() => {
+      generarPensamiento();
+    }, 700);
+
+    // parar automáticamente después de 10 segundos
+    setTimeout(() => {
+      clearInterval(interval);
+      setGrabando(false);
       setPantalla("final");
-    }
-  }, [pensamientos]);
+    }, 10000);
+  };
 
   // 🟢 Pantalla inicio
   if (pantalla === "inicio") {
@@ -102,8 +104,10 @@ export default function AnsiedadScreen() {
           </Text>
         ))}
 
-        <Pressable style={styles.botonRespirar} onPress={respirar}>
-          <Text style={styles.botonTexto}>RESPIRAR</Text>
+        <Pressable style={styles.botonRespirar} onPress={empezarAGritar}>
+          <Text style={styles.botonTexto}>
+            {grabando ? "GRITANDO..." : "GRITAR 🎤"}
+          </Text>
         </Pressable>
       </View>
     );
@@ -111,16 +115,9 @@ export default function AnsiedadScreen() {
 
   // 🔵 Pantalla final
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: respirado ? "#d4f5d4" : "#000" },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: "#d4f5d4" }]}>
       <Text style={styles.textoGrande}>
-        {respirado
-          ? "No desaparece… pero podés controlarlo."
-          : "A veces es demasiado."}
+        Lo sacaste afuera.
       </Text>
 
       <Pressable
@@ -128,8 +125,7 @@ export default function AnsiedadScreen() {
         onPress={() => {
           setPantalla("inicio");
           setPensamientos([]);
-          setRespirado(false);
-          setIntervaloTiempo(2000);
+          setGrabando(false);
         }}
       >
         <Text style={styles.botonTexto}>Reiniciar</Text>
@@ -157,15 +153,13 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
   },
-  boton: {
-    backgroundColor: "#444",
-    padding: 15,
-    borderRadius: 10,
+  boton: {import { Audio } from "expo-av";
+
   },
   botonRespirar: {
     position: "absolute",
     bottom: 50,
-    backgroundColor: "#2ecc71",
+    backgroundColor: "#e74c3c",
     padding: 15,
     borderRadius: 10,
   },
