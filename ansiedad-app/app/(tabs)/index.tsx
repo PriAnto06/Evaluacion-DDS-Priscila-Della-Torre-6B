@@ -1,98 +1,166 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useState } from "react";
+import {
+  StyleSheet,
+  Text,
+  View,
+  Pressable,
+  Dimensions,
+} from "react-native";
+import { Audio } from "expo-av";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const { width, height } = Dimensions.get("window");
 
-export default function HomeScreen() {
+const FRASES = [
+  "¿Y si sale mal?",
+  "No sos suficiente",
+  "Te van a juzgar",
+  "Todo va a fallar",
+  "No podés hacerlo",
+  "Algo va a salir mal",
+];
+
+type Pensamiento = {
+  id: string;
+  texto: string;
+  x: number;
+  y: number;
+};
+
+export default function AnsiedadScreen() {
+  const [pantalla, setPantalla] = useState<"inicio" | "ansiedad" | "final">("inicio");
+  const [pensamientos, setPensamientos] = useState<Pensamiento[]>([]);
+  const [grabando, setGrabando] = useState(false);
+
+  const generarPensamiento = () => {
+    const frase =
+      FRASES[Math.floor(Math.random() * FRASES.length)];
+
+    setPensamientos((prev) => [
+      ...prev,
+      {
+        id: Math.random().toString(),
+        texto: frase,
+        x: Math.random() * (width - 100),
+        y: Math.random() * (height - 100),
+      },
+    ]);
+  };
+
+  const empezarAGritar = async () => {
+    const permiso = await Audio.requestPermissionsAsync();
+    if (!permiso.granted) return;
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    setGrabando(true);
+
+    const interval = setInterval(() => {
+      generarPensamiento();
+    }, 700);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      setGrabando(false);
+      setPantalla("final");
+    }, 10000);
+  };
+
+  if (pantalla === "inicio") {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.textoGrande}>Todo está tranquilo…</Text>
+
+        <Pressable
+          style={styles.boton}
+          onPress={() => setPantalla("ansiedad")}
+        >
+          <Text style={styles.botonTexto}>Empezar</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  if (pantalla === "ansiedad") {
+    return (
+      <View style={styles.container}>
+        {pensamientos.map((p) => (
+          <Text
+            key={p.id}
+            style={[
+              styles.pensamiento,
+              { top: p.y, left: p.x },
+            ]}
+          >
+            {p.texto}
+          </Text>
+        ))}
+
+        <Pressable style={styles.botonRespirar} onPress={empezarAGritar}>
+          <Text style={styles.botonTexto}>
+            {grabando ? "GRITANDO..." : "GRITAR 🎤"}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={[styles.container, { backgroundColor: "#d4f5d4" }]}>
+      <Text style={styles.textoGrande}>
+        Lo sacaste afuera.
+      </Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <Pressable
+        style={styles.boton}
+        onPress={() => {
+          setPantalla("inicio");
+          setPensamientos([]);
+          setGrabando(false);
+        }}
+      >
+        <Text style={styles.botonTexto}>Reiniciar</Text>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  textoGrande: {
+    color: "#fff",
+    fontSize: 24,
+    textAlign: "center",
+    marginBottom: 20,
+    paddingHorizontal: 20,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  pensamiento: {
+    position: "absolute",
+    color: "white",
+    fontSize: 16,
+  },
+  boton: {
+    backgroundColor: "#1e90ff",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  botonRespirar: {
+    position: "absolute",
+    bottom: 40,
+    backgroundColor: "#ff4d4d",
+    padding: 16,
+    borderRadius: 50,
+  },
+  botonTexto: {
+    color: "#fff",
+    fontWeight: "bold",
   },
 });
