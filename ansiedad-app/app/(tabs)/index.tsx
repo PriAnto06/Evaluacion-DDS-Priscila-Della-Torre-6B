@@ -1,98 +1,189 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Audio } from "expo-av";
+import React, { useRef, useState } from "react";
+import {
+  Animated,
+  Dimensions,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const { height } = Dimensions.get("window");
 
-export default function HomeScreen() {
+const FRASES = [
+  "GRITA",
+  "¿Y si sale mal?",
+  "No sos suficiente",
+  "Te van a juzgar",
+  "Todo va a fallar",
+];
+
+export default function ScrollEfecto() {
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const scrollRef = useRef<Animated.ScrollView>(null);
+
+  const [grabando, setGrabando] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+
+  const scrollPos = useRef(0);
+
+  const empezar = async () => {
+    const permiso = await Audio.requestPermissionsAsync();
+    if (!permiso.granted) return;
+
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+    });
+
+    const recording = new Audio.Recording();
+    await recording.prepareToRecordAsync({
+      ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      isMeteringEnabled: true,
+    });
+
+    await recording.startAsync();
+    recordingRef.current = recording;
+
+    setGrabando(true);
+
+    const interval = setInterval(async () => {
+      const status = await recording.getStatusAsync();
+      if (!status.isRecording) return;
+
+      const volumen = status.metering ?? -160;
+
+      // 😱 GRITA → BAJA
+      if (volumen > -20) {
+        scrollPos.current += 15;
+      } else {
+        // 🤫 NO GRITA → SUBE
+        scrollPos.current -= 10;
+      }
+
+      // límites
+      if (scrollPos.current < 0) scrollPos.current = 0;
+      if (scrollPos.current > height * FRASES.length)
+        scrollPos.current = height * FRASES.length;
+
+      scrollRef.current?.scrollTo({
+        y: scrollPos.current,
+        animated: false,
+      });
+    }, 50);
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={styles.container}>
+      {/* 🟢 ANTES DE EMPEZAR */}
+      {!grabando && (
+        <View style={styles.center}>
+          <Text style={styles.grita}>GRITA</Text>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+          <Pressable style={styles.boton} onPress={empezar}>
+            <Text style={styles.botonTexto}>EMPEZAR 🎤</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* 🔴 CUANDO GRABA */}
+      {grabando && (
+        <Animated.ScrollView
+          ref={scrollRef}
+          scrollEnabled={false}
+          contentContainerStyle={{ height: height * FRASES.length }}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true },
+          )}
+        >
+          {FRASES.map((texto, i) => {
+            const inputRange = [(i - 1) * height, i * height, (i + 1) * height];
+
+            const translateY = scrollY.interpolate({
+              inputRange,
+              outputRange: [100, 0, -100],
+              extrapolate: "clamp",
+            });
+
+            const opacity = scrollY.interpolate({
+              inputRange,
+              outputRange: [0, 1, 0],
+              extrapolate: "clamp",
+            });
+
+            const scale = scrollY.interpolate({
+              inputRange,
+              outputRange: [0.8, 1.2, 0.8],
+              extrapolate: "clamp",
+            });
+
+            const rotate = scrollY.interpolate({
+              inputRange,
+              outputRange: ["-20deg", "0deg", "20deg"],
+              extrapolate: "clamp",
+            });
+
+            return (
+              <View key={i} style={styles.page}>
+                <Animated.Text
+                  style={[
+                    styles.text,
+                    i === 0 && styles.grita,
+                    {
+                      opacity,
+                      transform: [{ translateY }, { scale }, { rotate }],
+                    },
+                  ]}
+                >
+                  {texto}
+                </Animated.Text>
+              </View>
+            );
+          })}
+        </Animated.ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  page: {
+    height,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  text: {
+    color: "#fff",
+    fontSize: 28,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  grita: {
+    fontSize: 50,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  boton: {
+    marginTop: 20,
+    backgroundColor: "#ff4d4d",
+    padding: 15,
+    borderRadius: 10,
+  },
+  botonTexto: {
+    color: "#fff",
+    fontWeight: "bold",
   },
 });
