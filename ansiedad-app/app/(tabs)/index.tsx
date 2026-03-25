@@ -21,10 +21,11 @@ const FRASES = [
 
 export default function ScrollEfecto() {
   const scrollY = useRef(new Animated.Value(0)).current;
-  const scrollRef = useRef<Animated.ScrollView>(null);
+  const scrollRef = useRef<any>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const [grabando, setGrabando] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const [mostrarRespirar, setMostrarRespirar] = useState(false);
 
   const scrollPos = useRef(0);
 
@@ -38,15 +39,18 @@ export default function ScrollEfecto() {
     });
 
     const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync({
-      ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      isMeteringEnabled: true,
-    });
+    await recording.prepareToRecordAsync(
+      Audio.RecordingOptionsPresets.HIGH_QUALITY,
+    );
 
     await recording.startAsync();
     recordingRef.current = recording;
 
     setGrabando(true);
+    setMostrarRespirar(false);
+
+    let silencioFrames = 0;
+    let tiempoEnArriba = 0;
 
     const interval = setInterval(async () => {
       const status = await recording.getStatusAsync();
@@ -54,12 +58,16 @@ export default function ScrollEfecto() {
 
       const volumen = status.metering ?? -160;
 
-      // 😱 GRITA → BAJA
-      if (volumen > -20) {
+      // 🔊 SENSIBILIDAD (ajustable)
+      if (volumen > -25) {
+        // 😱 GRITA → BAJA
         scrollPos.current += 15;
+        silencioFrames = 0;
+        tiempoEnArriba = 0;
       } else {
-        // 🤫 NO GRITA → SUBE
+        // 🤫 SILENCIO → SUBE
         scrollPos.current -= 10;
+        silencioFrames++;
       }
 
       // límites
@@ -71,12 +79,39 @@ export default function ScrollEfecto() {
         y: scrollPos.current,
         animated: false,
       });
+
+      // 😌 mostrar mensaje
+      if (silencioFrames > 15) {
+        setMostrarRespirar(true);
+      }
+
+      // 🟢 SI ESTÁ EN GRITA (ARRIBA)
+      if (scrollPos.current <= 5) {
+        tiempoEnArriba += 50;
+
+        if (tiempoEnArriba >= 30000) {
+          // ⏱️ 30 SEG → REINICIO
+          clearInterval(interval);
+
+          await recording.stopAndUnloadAsync();
+
+          setGrabando(false);
+          setMostrarRespirar(false);
+
+          scrollPos.current = 0;
+
+          scrollRef.current?.scrollTo({
+            y: 0,
+            animated: false,
+          });
+        }
+      }
     }, 50);
   };
 
   return (
     <View style={styles.container}>
-      {/* 🟢 ANTES DE EMPEZAR */}
+      {/* 🟢 INICIO */}
       {!grabando && (
         <View style={styles.center}>
           <Text style={styles.grita}>GRITA</Text>
@@ -87,64 +122,75 @@ export default function ScrollEfecto() {
         </View>
       )}
 
-      {/* 🔴 CUANDO GRABA */}
+      {/* 🔴 DURANTE */}
       {grabando && (
-        <Animated.ScrollView
-          ref={scrollRef}
-          scrollEnabled={false}
-          contentContainerStyle={{ height: height * FRASES.length }}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true },
+        <>
+          <Animated.ScrollView
+            ref={scrollRef}
+            scrollEnabled={false}
+            contentContainerStyle={{ height: height * FRASES.length }}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: true },
+            )}
+          >
+            {FRASES.map((texto, i) => {
+              const inputRange = [
+                (i - 1) * height,
+                i * height,
+                (i + 1) * height,
+              ];
+
+              const translateY = scrollY.interpolate({
+                inputRange,
+                outputRange: [100, 0, -100],
+                extrapolate: "clamp",
+              });
+
+              const opacity = scrollY.interpolate({
+                inputRange,
+                outputRange: [0, 1, 0],
+                extrapolate: "clamp",
+              });
+
+              const scale = scrollY.interpolate({
+                inputRange,
+                outputRange: [0.8, 1.2, 0.8],
+                extrapolate: "clamp",
+              });
+
+              const rotate = scrollY.interpolate({
+                inputRange,
+                outputRange: ["-20deg", "0deg", "20deg"],
+                extrapolate: "clamp",
+              });
+
+              return (
+                <View key={i} style={styles.page}>
+                  <Animated.Text
+                    style={[
+                      styles.text,
+                      i === 0 && styles.grita,
+                      {
+                        opacity,
+                        transform: [{ translateY }, { scale }, { rotate }],
+                      },
+                    ]}
+                  >
+                    {texto}
+                  </Animated.Text>
+                </View>
+              );
+            })}
+          </Animated.ScrollView>
+
+          {/* 😌 MENSAJE */}
+          {mostrarRespirar && (
+            <Text style={styles.respirar}>Tranquilo, podés respirar</Text>
           )}
-        >
-          {FRASES.map((texto, i) => {
-            const inputRange = [(i - 1) * height, i * height, (i + 1) * height];
-
-            const translateY = scrollY.interpolate({
-              inputRange,
-              outputRange: [100, 0, -100],
-              extrapolate: "clamp",
-            });
-
-            const opacity = scrollY.interpolate({
-              inputRange,
-              outputRange: [0, 1, 0],
-              extrapolate: "clamp",
-            });
-
-            const scale = scrollY.interpolate({
-              inputRange,
-              outputRange: [0.8, 1.2, 0.8],
-              extrapolate: "clamp",
-            });
-
-            const rotate = scrollY.interpolate({
-              inputRange,
-              outputRange: ["-20deg", "0deg", "20deg"],
-              extrapolate: "clamp",
-            });
-
-            return (
-              <View key={i} style={styles.page}>
-                <Animated.Text
-                  style={[
-                    styles.text,
-                    i === 0 && styles.grita,
-                    {
-                      opacity,
-                      transform: [{ translateY }, { scale }, { rotate }],
-                    },
-                  ]}
-                >
-                  {texto}
-                </Animated.Text>
-              </View>
-            );
-          })}
-        </Animated.ScrollView>
+        </>
       )}
     </View>
   );
@@ -184,6 +230,14 @@ const styles = StyleSheet.create({
   },
   botonTexto: {
     color: "#fff",
+    fontWeight: "bold",
+  },
+  respirar: {
+    position: "absolute",
+    bottom: 80,
+    alignSelf: "center",
+    color: "#00ff88",
+    fontSize: 22,
     fontWeight: "bold",
   },
 });
