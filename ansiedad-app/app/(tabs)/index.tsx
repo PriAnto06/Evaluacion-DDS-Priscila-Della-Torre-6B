@@ -25,93 +25,96 @@ export default function ScrollEfecto() {
   const recordingRef = useRef<Audio.Recording | null>(null);
 
   const [grabando, setGrabando] = useState(false);
-  const [mostrarRespirar, setMostrarRespirar] = useState(false);
 
   const scrollPos = useRef(0);
 
   const empezar = async () => {
-    const permiso = await Audio.requestPermissionsAsync();
-    if (!permiso.granted) return;
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    });
-
-    const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync(
-      Audio.RecordingOptionsPresets.HIGH_QUALITY,
-    );
-
-    await recording.startAsync();
-    recordingRef.current = recording;
-
-    setGrabando(true);
-    setMostrarRespirar(false);
-
-    let silencioFrames = 0;
-    let tiempoEnArriba = 0;
-
-    const interval = setInterval(async () => {
-      const status = await recording.getStatusAsync();
-      if (!status.isRecording) return;
-
-      const volumen = status.metering ?? -160;
-
-      // 🔊 SENSIBILIDAD (ajustable)
-      if (volumen > -25) {
-        // 😱 GRITA → BAJA
-        scrollPos.current += 15;
-        silencioFrames = 0;
-        tiempoEnArriba = 0;
-      } else {
-        // 🤫 SILENCIO → SUBE
-        scrollPos.current -= 10;
-        silencioFrames++;
+    try {
+      // 🔴 MATAR grabación previa SI EXISTE
+      if (recordingRef.current) {
+        try {
+          await recordingRef.current.stopAndUnloadAsync();
+        } catch (e) {}
+        recordingRef.current = null;
       }
 
-      // límites
-      if (scrollPos.current < 0) scrollPos.current = 0;
-      if (scrollPos.current > height * FRASES.length)
-        scrollPos.current = height * FRASES.length;
+      const permiso = await Audio.requestPermissionsAsync();
+      if (!permiso.granted) return;
 
-      scrollRef.current?.scrollTo({
-        y: scrollPos.current,
-        animated: false,
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
       });
 
-      // 😌 mostrar mensaje
-      if (silencioFrames > 15) {
-        setMostrarRespirar(true);
-      }
+      const recording = new Audio.Recording();
 
-      // 🟢 SI ESTÁ EN GRITA (ARRIBA)
-      if (scrollPos.current <= 5) {
-        tiempoEnArriba += 50;
+      await recording.prepareToRecordAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
 
-        if (tiempoEnArriba >= 30000) {
-          // ⏱️ 30 SEG → REINICIO
-          clearInterval(interval);
+      await recording.startAsync();
+      recordingRef.current = recording;
 
-          await recording.stopAndUnloadAsync();
+      setGrabando(true);
 
-          setGrabando(false);
-          setMostrarRespirar(false);
+      let silencioFrames = 0;
+      let tiempoEnArriba = 0;
 
-          scrollPos.current = 0;
+      const interval = setInterval(async () => {
+        try {
+          const status = await recording.getStatusAsync();
+          if (!status.isRecording) return;
+
+          const volumen = status.metering ?? -160;
+
+          if (volumen > -25) {
+            scrollPos.current += 15;
+            silencioFrames = 0;
+            tiempoEnArriba = 0;
+          } else {
+            scrollPos.current -= 10;
+            silencioFrames++;
+          }
+
+          if (scrollPos.current < 0) scrollPos.current = 0;
+          if (scrollPos.current > height * FRASES.length)
+            scrollPos.current = height * FRASES.length;
 
           scrollRef.current?.scrollTo({
-            y: 0,
+            y: scrollPos.current,
             animated: false,
           });
+
+          if (scrollPos.current <= 5) {
+            tiempoEnArriba += 50;
+
+            if (tiempoEnArriba >= 30000) {
+              clearInterval(interval);
+
+              await recording.stopAndUnloadAsync();
+              recordingRef.current = null;
+
+              setGrabando(false);
+
+              scrollPos.current = 0;
+
+              scrollRef.current?.scrollTo({
+                y: 0,
+                animated: false,
+              });
+            }
+          }
+        } catch (e) {
+          // evita romper el interval
         }
-      }
-    }, 50);
+      }, 50);
+    } catch (error) {
+      console.log("ERROR GRABACIÓN:", error);
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/* 🟢 INICIO */}
       {!grabando && (
         <View style={styles.center}>
           <Text style={styles.grita}>GRITA</Text>
@@ -122,7 +125,6 @@ export default function ScrollEfecto() {
         </View>
       )}
 
-      {/* 🔴 DURANTE */}
       {grabando && (
         <>
           <Animated.ScrollView
@@ -185,11 +187,6 @@ export default function ScrollEfecto() {
               );
             })}
           </Animated.ScrollView>
-
-          {/* 😌 MENSAJE */}
-          {mostrarRespirar && (
-            <Text style={styles.respirar}>Tranquilo, podés respirar</Text>
-          )}
         </>
       )}
     </View>
@@ -230,14 +227,6 @@ const styles = StyleSheet.create({
   },
   botonTexto: {
     color: "#fff",
-    fontWeight: "bold",
-  },
-  respirar: {
-    position: "absolute",
-    bottom: 80,
-    alignSelf: "center",
-    color: "#00ff88",
-    fontSize: 22,
     fontWeight: "bold",
   },
 });
